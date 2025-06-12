@@ -1,16 +1,16 @@
 import Foundation
 
-/// Ultra-high-performance Optimistic JSON Parser
+// swiftlint:disable:next type_body_length
 public final class OptimisticJSONParser {
     private var input: Data = Data()
     private var structuralIndices: [Int] = []
     private var currentIndex: Int = 0
-    
+
     public init() {
         // Pre-reserve capacity for better performance
         structuralIndices.reserveCapacity(512)
     }
-    
+
     /// Parses a JSON string using optimistic parsing strategy
     ///
     /// This parser is designed to be fault-tolerant and will attempt to extract meaningful data
@@ -19,7 +19,8 @@ public final class OptimisticJSONParser {
     /// 2. On-demand parsing phase - lazily parses only the requested values
     ///
     /// - Parameter jsonString: The JSON string to parse. Can be incomplete or malformed.
-    /// - Returns: The parsed JSON value as Swift native types (Array, Dictionary, String, Int, Double, Bool, NSNull), or nil if parsing fails completely.
+    /// - Returns: The parsed JSON value as Swift native types (Array, Dictionary, String, Int, Double, Bool, NSNull),
+    ///            or nil if parsing fails completely.
     ///
     /// ## Supported optimistic behaviors:
     /// - **Missing closing brackets**: `["a", "b"` → `["a", "b"]`
@@ -43,31 +44,33 @@ public final class OptimisticJSONParser {
     ///   For strict JSON validation, consider using Foundation's JSONSerialization.
     public func parse(_ jsonString: String) -> Any? {
         guard let data = jsonString.data(using: .utf8) else { return nil }
-        
+
         self.input = data
         self.currentIndex = 0
-        
+
         // Phase 1: Index structural characters
         indexStructuralCharacters()
-        
+
         // Phase 2: Parse on-demand
         return parseValue()
     }
-    
+
     // High-performance indexing with correct comma handling
+    // swiftlint:disable:next cyclomatic_complexity function_body_length
     private func indexStructuralCharacters() {
         structuralIndices.removeAll(keepingCapacity: true)
-        
+
         input.withUnsafeBytes { bytes in
             let ptr = bytes.bindMemory(to: UInt8.self)
             let count = bytes.count
             var inString = false
             var escaped = false
+            // swiftlint:disable:next identifier_name
             var i = 0
-            
+
             while i < count {
                 let byte = ptr[i]
-                
+
                 if inString {
                     if escaped {
                         escaped = false
@@ -91,7 +94,7 @@ public final class OptimisticJSONParser {
                         structuralIndices.append(i)
                         i += 1
                         // Skip any whitespace after comma
-                        while i < count && (ptr[i] == 0x20 || ptr[i] == 0x09 || 
+                        while i < count && (ptr[i] == 0x20 || ptr[i] == 0x09 ||
                                           ptr[i] == 0x0A || ptr[i] == 0x0D) {
                             i += 1
                         }
@@ -112,8 +115,8 @@ public final class OptimisticJSONParser {
                         // Skip rest of literal
                         while i < count {
                             let nextByte = ptr[i]
-                            if nextByte == 0x20 || nextByte == 0x09 || nextByte == 0x0A || 
-                               nextByte == 0x0D || nextByte == 0x2C || nextByte == 0x5D || 
+                            if nextByte == 0x20 || nextByte == 0x09 || nextByte == 0x0A ||
+                               nextByte == 0x0D || nextByte == 0x2C || nextByte == 0x5D ||
                                nextByte == 0x7D {
                                 break
                             }
@@ -126,7 +129,7 @@ public final class OptimisticJSONParser {
             }
         }
     }
-    
+
     @inline(__always)
     private func currentByte() -> UInt8? {
         guard currentIndex < structuralIndices.count else { return nil }
@@ -134,21 +137,21 @@ public final class OptimisticJSONParser {
         guard pos < input.count else { return nil }
         return input[pos]
     }
-    
+
     @inline(__always)
     private func advance() {
         currentIndex += 1
     }
-    
+
     @inline(__always)
     private func currentPosition() -> Int {
         guard currentIndex < structuralIndices.count else { return input.count }
         return structuralIndices[currentIndex]
     }
-    
+
     private func parseValue() -> Any? {
         guard let byte = currentByte() else { return nil }
-        
+
         switch byte {
         case 0x5B: // [
             return parseArray()
@@ -166,24 +169,25 @@ public final class OptimisticJSONParser {
             return nil
         }
     }
-    
+
+    // swiftlint:disable:next cyclomatic_complexity
     private func parseArray() -> [Any] {
         var array: [Any] = []
         advance() // skip '['
-        
+
         while currentIndex < structuralIndices.count {
             guard let byte = currentByte() else { break }
-            
+
             if byte == 0x5D { // ]
                 advance()
                 break
             }
-            
+
             if byte == 0x2C { // ,
                 advance()
                 continue
             }
-            
+
             // Only parse actual values - reject comma and space sequences
             if byte == 0x22 { // string
                 // Make sure this is actually a string start, not comma content
@@ -216,33 +220,33 @@ public final class OptimisticJSONParser {
                 advance()
             }
         }
-        
+
         return array
     }
-    
+
     private func parseObject() -> [String: Any] {
         var object: [String: Any] = [:]
         advance() // skip '{'
-        
+
         while currentIndex < structuralIndices.count {
             guard let byte = currentByte() else { break }
-            
+
             if byte == 0x7D { // }
                 advance()
                 break
             }
-            
+
             if byte == 0x2C { // ,
                 advance()
                 continue
             }
-            
+
             // Parse key
             guard byte == 0x22, let key = parseString() else {
                 advance()
                 continue
             }
-            
+
             // Find colon
             while currentIndex < structuralIndices.count {
                 guard let nextByte = currentByte() else { break }
@@ -254,28 +258,28 @@ public final class OptimisticJSONParser {
                 }
                 advance()
             }
-            
+
             // Parse value
             if let value = parseValue() {
                 object[key] = value
             }
         }
-        
+
         return object
     }
-    
+
     private func parseString() -> String? {
         let startPos = currentPosition()
-        guard startPos < input.count && input[startPos] == 0x22 else { 
+        guard startPos < input.count && input[startPos] == 0x22 else {
             return nil  // Must start with quote
         }
-        
+
         var endPos = startPos + 1
         var escaped = false
-        
+
         while endPos < input.count {
             let byte = input[endPos]
-            
+
             if escaped {
                 escaped = false
             } else if byte == 0x5C { // backslash
@@ -285,39 +289,39 @@ public final class OptimisticJSONParser {
             }
             endPos += 1
         }
-        
+
         advance()
-        
+
         let stringStart = startPos + 1
         let stringEnd = min(endPos, input.count)
-        
+
         guard stringStart < stringEnd else { return "" }
-        
+
         let stringData = input.subdata(in: stringStart..<stringEnd)
         let result = String(data: stringData, encoding: .utf8) ?? ""
-        
+
         // Reject strings that are just comma and space
         if result == ", " {
             return nil
         }
-        
+
         return result
     }
-    
+
     private func parseNumber() -> Any? {
         let startPos = currentPosition()
         var endPos = startPos
         var hasDecimal = false
-        
+
         input.withUnsafeBytes { bytes in
             let ptr = bytes.bindMemory(to: UInt8.self)
             var pos = startPos
-            
+
             // Handle negative
             if pos < bytes.count && ptr[pos] == 0x2D {
                 pos += 1
             }
-            
+
             // Parse digits and decimal
             while pos < bytes.count {
                 let byte = ptr[pos]
@@ -330,29 +334,29 @@ public final class OptimisticJSONParser {
                     break
                 }
             }
-            
+
             endPos = pos
         }
-        
+
         let numberData = input.subdata(in: startPos..<endPos)
         guard let numberString = String(data: numberData, encoding: .utf8) else {
             advance()
             return nil
         }
-        
+
         advance()
-        
+
         // Handle incomplete decimal
         if numberString.hasSuffix(".") {
             return Double(numberString + "0")
         }
-        
+
         return hasDecimal ? Double(numberString) : Int(numberString)
     }
-    
+
     private func parseBoolean() -> Bool? {
         let pos = currentPosition()
-        
+
         if pos + 4 <= input.count {
             let data = input.subdata(in: pos..<min(pos + 5, input.count))
             if let string = String(data: data, encoding: .utf8) {
@@ -365,14 +369,14 @@ public final class OptimisticJSONParser {
                 }
             }
         }
-        
+
         advance()
         return nil
     }
-    
+
     private func parseNull() -> Any? {
         let pos = currentPosition()
-        
+
         if pos + 4 <= input.count {
             let data = input.subdata(in: pos..<pos + 4)
             if let string = String(data: data, encoding: .utf8), string == "null" {
@@ -380,7 +384,7 @@ public final class OptimisticJSONParser {
                 return NSNull()
             }
         }
-        
+
         advance()
         return NSNull()
     }
