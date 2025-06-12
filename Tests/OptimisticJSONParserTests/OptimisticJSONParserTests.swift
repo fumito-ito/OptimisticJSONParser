@@ -3,7 +3,7 @@ import Testing
 
 let brokenJSONString = [
     "[\"oops\", \"this\", \"is\", \"missing the end bracket",
-    "{ \"maybe_a_float\": 12.",
+    "{ \"maybe_a_float\": 12.}",
     "[1, 2, {\"a\": \"apple\"}",
     "[1, 2, {\"a\": \"apple",
     "{\"coordinates\":[{\"x\":1.0"
